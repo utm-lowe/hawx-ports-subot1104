@@ -156,7 +156,24 @@ port_init(void)
     // Loop through 0 to NPORT-1, initialize status of kernal ports and
     // non-kernal ports. Make sure that all ports are empty.
 
-    // YOUR CODE HERE
+    //initialize predefined ports
+    for(int i = 0; i <= PORT_DISKCMD; i++){
+        ports[i].free = 0;
+        ports[i].owner = 0;
+        ports[i].type = PORT_TYPE_KERNEL;
+        ports[i].head = 0;
+        ports[i].tail = 0;
+        ports[i].count = 0;
+    }
+    //initialize non-kernal ports
+    for(int i = PORT_DISKCMD + 1; i < NPORT; i++){
+        ports[i].free = 1;
+        ports[i].owner = 0;
+        ports[i].type = PORT_TYPE_FREE;
+        ports[i].head = 0;
+        ports[i].tail = 0;
+        ports[i].count = 0;
+    }
 }
 
 
@@ -167,7 +184,17 @@ port_close(int port)
     // Close the port.  If the port is not open, nothing will happen.  However,
     // if it is open, we empty its contents and mark it as free.
 
-    // YOUR CODE HERE
+    //if port is already closed, do nothing
+    if(ports[port].free == 1)
+        return;
+
+    //mark port as free and reset its fields
+    ports[port].free = 1;
+    ports[port].owner = 0;
+    ports[port].type = PORT_TYPE_FREE;
+    ports[port].head = 0;
+    ports[port].tail = 0;
+    ports[port].count = 0;
 }
 
 
@@ -184,9 +211,40 @@ port_acquire(int port, procid_t proc_id)
     // 
     // If this operation fails, return -1.
 
-    // YOUR CODE HERE
-    
-    return -1;
+
+    //checks if port number is -1 (any port)
+    if(port == -1){
+        //loop through all non-kernal ports until a port is found or all ports are checked
+        for(int i = PORT_DISKCMD + 1; i < NPORT; i++){
+            if(ports[i].free == 1){
+                //allocate port for process
+                ports[i].free = 0;
+                ports[i].owner = proc_id;
+                return i;
+            }
+        }
+    }
+
+    //if a port number is specified
+    else{
+        //check if the port number is valid
+        if(port < PORT_DISKCMD + 1 || port >= NPORT){
+            return -1;
+        }
+
+        //checks if the port is occupied
+        if(ports[port].free == 0){
+            return -1;
+        }
+
+        //if not, allocate port for process and return port number
+        else{
+            ports[port].free = 0;
+            ports[port].owner = proc_id;
+            return port;
+        }
+    }
+    return -1; //something went wrong if you get here
 }
 
 
@@ -200,8 +258,23 @@ port_write(int port, char *buf, int n)
     // you have written. Be sure to update the count field as you
     // write it.
 
-    // YOUR CODE HERE
-    return -1;
+
+    //if port is closed, return -1
+    if(ports[port].free == 1){
+        return -1;
+    }
+
+    //write to the port until the buffer is full or n bytes have been written
+    int bytesWritten = 0;
+    while(ports[port].count < PORT_BUF_SIZE && bytesWritten < n){
+        ports[port].buffer[ports[port].head] = buf[bytesWritten];
+        ports[port].count++;
+        ports[port].head = (ports[port].head + 1) % PORT_BUF_SIZE;
+        bytesWritten++;
+    }
+
+    //return the number of bytes written
+    return bytesWritten;
 }
 
 
@@ -215,7 +288,26 @@ port_read(int port, char *buf, int n)
     // Return the actual number of bytes you have read.
     // Be sure to update count as you read.
 
-    // YOUR CODE HERE
 
-    return -1;
+    //if port is closed, return -1
+    if(ports[port].free == 1){
+        return -1;
+    }
+
+    //invalid read size
+    if(n < 0){
+        return -1;
+    }
+
+    //read from the port until the buffer is empty or n bytes have been read
+    int bytesRead = 0;
+    while(ports[port].count > 0 && bytesRead < n){
+        buf[bytesRead] = ports[port].buffer[ports[port].tail];
+        ports[port].count--;
+        ports[port].tail = (ports[port].tail + 1) % PORT_BUF_SIZE;
+        bytesRead++;
+    }
+
+    //return the number of bytes read
+    return bytesRead;
 }
